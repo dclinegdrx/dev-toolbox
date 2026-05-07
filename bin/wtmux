@@ -98,6 +98,7 @@ fi
 cd "$repo_dir" || exit 1
 
 update_default_branch
+default_branch="$(default_branch_name)"
 
 if [ ! -d "$worktree_dir" ]; then
   if git show-ref --verify --quiet "refs/heads/$branch"; then
@@ -108,14 +109,14 @@ if [ ! -d "$worktree_dir" ]; then
     git worktree add "$worktree_dir" -b "$branch" --track "origin/$branch"
   else
     echo "Creating new branch '$branch' from '$base'"
-    git worktree add "$worktree_dir" -b "$branch" "$base"
+    git worktree add "$worktree_dir" -b "$branch" --no-track "$base"
   fi
 else
   echo "Worktree already exists: $worktree_dir"
 fi
 
 if ! tmux has-session -t "$session" 2>/dev/null; then
-  main_window="$(default_branch_name)"
+  main_window="$default_branch"
   main_window_id="$(tmux new-session -d -P -F '#{window_id}' -s "$session" -n "$main_window" -c "$repo_dir")"
   tmux set-window-option -t "$main_window_id" automatic-rename off
   tmux rename-window -t "$main_window_id" "$main_window"

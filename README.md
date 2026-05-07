@@ -28,6 +28,8 @@ Good `wtreview` use cases:
 
 Neither command pushes branches to `origin`. They only fetch from `origin`, create or reuse local branches and worktrees, and open the matching tmux window.
 
+For new `wtmux` branches, the local branch is intentionally left without an upstream. You decide when and where to push it.
+
 ## Requirements
 
 - `bash`
@@ -123,6 +125,7 @@ The scripts:
 - if the branch exists locally, it creates or reuses a worktree for that local branch
 - if the branch exists on `origin` but not locally, it creates a local tracking branch from `origin/<branch>`
 - if the branch does not exist locally or on `origin`, it creates a new local branch from the default branch or provided base
+- new local branches are created without an upstream, so plain `git push` will not choose a remote destination for you
 - it does not push the branch
 
 `wtreview` branch behavior:
