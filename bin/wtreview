@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${1:-}"
+remote_branch="${2:-}"
+local_name="${3:-}"
+
+if [ -z "$repo" ] || [ -z "$remote_branch" ]; then
+  echo "Usage: wtreview <repo-dir-name> <remote-branch> [local-name]"
+  echo "Example: wtreview app feature/some-change"
+  echo "Example: wtreview app feature/some-change review-some-change"
+  exit 1
+fi
+
+config_file="${XDG_CONFIG_HOME:-$HOME/.config}/dev-toolbox/wt.env"
+[ -f "$config_file" ] && . "$config_file"
+
+root="${WTMUX_ROOT:-$HOME/src}"
+agent_cmd="${WTREVIEW_AGENT_CMD:-${WTMUX_AGENT_CMD:-}}"
+repo_dir="$root/$repo"
+
+if [ -z "$local_name" ]; then
+  local_name="review-$remote_branch"
+fi
+
+safe_name="$(echo "$local_name" | sed 's#[^a-zA-Z0-9._-]#-#g')"
+
+worktree_dir="$root/${repo}-${safe_name}"
+session="$repo"
+window="$safe_name"
+
+default_branch_name() {
+  local origin_head
+
+  origin_head="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  if [ -n "$origin_head" ]; then
+    echo "${origin_head#origin/}"
+    return
+  fi
+
+  if git show-ref --verify --quiet refs/remotes/origin/main || git show-ref --verify --quiet refs/heads/main; then
+    echo "main"
+  elif git show-ref --verify --quiet refs/remotes/origin/master || git show-ref --verify --quiet refs/heads/master; then
+    echo "master"
+  else
+    echo "main"
+  fi
+}
+
+branch_worktree_path() {
+  git worktree list --porcelain | awk -v ref="refs/heads/$1" '
+    $1 == "worktree" { path = substr($0, 10) }
+    $1 == "branch" && $2 == ref { print path; exit }
+  '
+}
+
+update_default_branch() {
+  local main_branch
+  local main_worktree
+
+  echo "Fetching origin..."
+  git fetch origin
+
+  main_branch="$(default_branch_name)"
+  if ! git show-ref --verify --quiet "refs/remotes/origin/$main_branch"; then
+    echo "Remote default branch not found: origin/$main_branch"
+    exit 1
+  fi
+
+  if ! git show-ref --verify --quiet "refs/heads/$main_branch"; then
+    echo "Creating local default branch '$main_branch' from origin/$main_branch"
+    git branch --track "$main_branch" "origin/$main_branch"
+  fi
+
+  main_worktree="$(branch_worktree_path "$main_branch")"
+  if [ -n "$main_worktree" ]; then
+    echo "Updating $main_branch in $main_worktree..."
+    git -C "$main_worktree" merge --ff-only "origin/$main_branch"
+  else
+    echo "Updating local branch $main_branch..."
+    git fetch origin "$main_branch:$main_branch"
+  fi
+}
+
+open_tmux_window() {
+  tmux select-window -t "$session:$window"
+
+  if [ -n "${TMUX:-}" ]; then
+    tmux switch-client -t "$session"
+  else
+    exec tmux attach-session -t "$session"
+  fi
+}
+
+if [ ! -d "$repo_dir/.git" ] && [ ! -f "$repo_dir/.git" ]; then
+  echo "Repo not found: $repo_dir"
+  exit 1
+fi
+
+cd "$repo_dir" || exit 1
+
+update_default_branch
+
+if [ ! -d "$worktree_dir" ]; then
+  if git show-ref --verify --quiet "refs/heads/$local_name"; then
+    echo "Creating worktree from existing local branch: $local_name"
+    git worktree add "$worktree_dir" "$local_name"
+  else
+    echo "Creating review branch '$local_name' from origin/$remote_branch"
+    git worktree add "$worktree_dir" -b "$local_name" "origin/$remote_branch"
+  fi
+else
+  echo "Worktree already exists: $worktree_dir"
+fi
+
+if ! tmux has-session -t "$session" 2>/dev/null; then
+  main_window="$(default_branch_name)"
+  main_window_id="$(tmux new-session -d -P -F '#{window_id}' -s "$session" -n "$main_window" -c "$repo_dir")"
+  tmux set-window-option -t "$main_window_id" automatic-rename off
+  tmux rename-window -t "$main_window_id" "$main_window"
+fi
+
+if ! tmux list-windows -t "$session" -F '#W' | grep -qx "$window"; then
+  window_id="$(tmux new-window -P -F '#{window_id}' -t "$session" -n "$window" -c "$worktree_dir")"
+  tmux set-window-option -t "$window_id" automatic-rename off
+  tmux rename-window -t "$window_id" "$window"
+  if [ -n "$agent_cmd" ]; then
+    sleep 0.2
+    tmux send-keys -t "$session:$window" "$agent_cmd"
+    tmux send-keys -t "$session:$window" C-j
+  fi
+else
+  echo "tmux window already exists: $session:$window"
+  tmux set-window-option -t "$session:$window" automatic-rename off
+fi
+
+open_tmux_window
