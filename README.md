@@ -4,14 +4,14 @@ Development workflow tools, scripts, and agent helpers.
 
 This repo starts with two git worktree + tmux helpers:
 
-- `wtmux`: create or reuse a worktree for feature work, open a tmux window for it, and optionally launch an agent command.
+- `wtdev`: create or reuse a worktree for feature work, open a tmux window for it, and optionally launch an agent command.
 - `wtreview`: create or reuse an isolated review worktree from a remote branch, open a tmux window for it, and optionally launch an agent command.
 
 ## Which command should I use?
 
-Use `wtmux` when you are doing your own development work.
+Use `wtdev` when you are doing your own development work.
 
-Good `wtmux` use cases:
+Good `wtdev` use cases:
 
 - starting work on a new local branch
 - reopening an existing local branch in its own worktree
@@ -28,7 +28,7 @@ Good `wtreview` use cases:
 
 Neither command pushes branches to `origin`. They only fetch from `origin`, create or reuse local branches and worktrees, and open the matching tmux window.
 
-For new `wtmux` branches, the local branch is intentionally left without an upstream. You decide when and where to push it.
+For new `wtdev` branches, the local branch is intentionally left without an upstream. You decide when and where to push it.
 
 ## Requirements
 
@@ -43,7 +43,7 @@ Clone the repo and symlink the commands into a directory on your `PATH`:
 ```bash
 git clone git@github.com:dclinegdrx/dev-toolbox.git ~/src/dev-toolbox
 mkdir -p ~/bin ~/.config/dev-toolbox
-ln -s ~/src/dev-toolbox/bin/wtmux ~/bin/wtmux
+ln -s ~/src/dev-toolbox/bin/wtdev ~/bin/wtdev
 ln -s ~/src/dev-toolbox/bin/wtreview ~/bin/wtreview
 cp ~/src/dev-toolbox/config/wt.env.example ~/.config/dev-toolbox/wt.env
 ```
@@ -55,43 +55,45 @@ Make sure `~/bin` is on your `PATH`.
 Edit `~/.config/dev-toolbox/wt.env`:
 
 ```bash
-export WTMUX_ROOT="$HOME/src"
-export WTMUX_AGENT_CMD=""
-export WTREVIEW_AGENT_CMD="$WTMUX_AGENT_CMD"
+export WTDEV_ROOT="$HOME/src"
+export WTDEV_AGENT_CMD=""
+export WTREVIEW_AGENT_CMD="$WTDEV_AGENT_CMD"
 ```
 
-`WTMUX_ROOT` is the directory that contains your normal repo checkouts. For example, if your repo lives at `~/src/app`, keep `WTMUX_ROOT="$HOME/src"` and pass `app` as the repo name.
+`WTDEV_ROOT` is the directory that contains your normal repo checkouts. For example, if your repo lives at `~/src/app`, keep `WTDEV_ROOT="$HOME/src"` and pass `app` as the repo name.
 
-Agent launch commands are optional. If `WTMUX_AGENT_CMD` and `WTREVIEW_AGENT_CMD` are empty, the scripts still create or reuse the worktree and tmux window, but they do not send a startup command.
+Agent launch commands are optional. If `WTDEV_AGENT_CMD` and `WTREVIEW_AGENT_CMD` are empty, the scripts still create or reuse the worktree and tmux window, but they do not send a startup command.
+
+Existing `WTMUX_ROOT` and `WTMUX_AGENT_CMD` settings are still honored as fallbacks, but new config should use `WTDEV_ROOT` and `WTDEV_AGENT_CMD`.
 
 ## Usage
 
 Create or open a feature worktree for a new branch:
 
 ```bash
-wtmux app feature/my-change
+wtdev app feature/my-change
 ```
 
-If `feature/my-change` does not exist locally or on `origin`, `wtmux` creates it locally from the repo default branch, usually `origin/main`.
+If `feature/my-change` does not exist locally or on `origin`, `wtdev` creates it locally from the repo default branch, usually `origin/main`.
 
 Open an existing local branch:
 
 ```bash
-wtmux app feature/existing-local-branch
+wtdev app feature/existing-local-branch
 ```
 
 Open an existing remote branch:
 
 ```bash
-wtmux app feature/existing-remote-branch
+wtdev app feature/existing-remote-branch
 ```
 
-If `origin/feature/existing-remote-branch` exists but the local branch does not, `wtmux` creates a local tracking branch from the remote branch.
+If `origin/feature/existing-remote-branch` exists but the local branch does not, `wtdev` creates a local tracking branch from the remote branch.
 
 Create a new branch from a custom base:
 
 ```bash
-wtmux app feature/my-change origin/develop
+wtdev app feature/my-change origin/develop
 ```
 
 Create or open a review worktree from an existing remote branch:
@@ -120,7 +122,7 @@ The scripts:
 - name the first tmux window after the repo default branch
 - open the target tmux window whether run inside or outside tmux
 
-`wtmux` branch behavior:
+`wtdev` branch behavior:
 
 - if the branch exists locally, it creates or reuses a worktree for that local branch
 - if the branch exists on `origin` but not locally, it creates a local tracking branch from `origin/<branch>`

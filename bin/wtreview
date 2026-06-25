@@ -15,8 +15,8 @@ fi
 config_file="${XDG_CONFIG_HOME:-$HOME/.config}/dev-toolbox/wt.env"
 [ -f "$config_file" ] && . "$config_file"
 
-root="${WTMUX_ROOT:-$HOME/src}"
-agent_cmd="${WTREVIEW_AGENT_CMD:-${WTMUX_AGENT_CMD:-}}"
+root="${WTDEV_ROOT:-${WTMUX_ROOT:-$HOME/src}}"
+agent_cmd="${WTREVIEW_AGENT_CMD:-${WTDEV_AGENT_CMD:-${WTMUX_AGENT_CMD:-}}}"
 repo_dir="$root/$repo"
 
 if [ -z "$local_name" ]; then
