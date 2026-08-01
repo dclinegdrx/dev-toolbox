@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Deterministic Joplin Web Clipper API operations for the Joplin skill."""
+"""Deterministic Joplin Web Clipper API operations for the Joplin skill.
+
+All operations are hard-scoped to the "Agent Notes" notebook and its
+sub-notebooks. Notes outside that scope are never read, created, updated,
+or deleted.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ from datetime import datetime
 from typing import Any
 
 DEFAULT_API_URI = "http://localhost:41184"
-DEFAULT_NOTEBOOK = "Agent Notes"
+NOTEBOOK = "Agent Notes"
 NOTE_TYPES = {
     "technical-explanation",
     "debugging",
@@ -69,6 +74,7 @@ class JoplinClient:
         self.base = str(cfg.get("api_uri", DEFAULT_API_URI)).rstrip("/")
         self.token = str(cfg["auth_token"])
         self.cfg = cfg
+        self._folders: list[dict[str, Any]] | None = None
 
     def request(self, method: str, path: str, data: dict[str, Any] | None = None) -> Any:
         separator = "&" if "?" in path else "?"
@@ -106,16 +112,74 @@ class JoplinClient:
                 return items
             page += 1
 
-    def folders(self) -> list[dict[str, Any]]:
-        return self.paged("/folders?fields=id,title,parent_id")
+    def folders(self, refresh: bool = False) -> list[dict[str, Any]]:
+        if self._folders is None or refresh:
+            self._folders = self.paged("/folders?fields=id,title,parent_id")
+        return self._folders
 
-    def resolve_folder(self, title: str, create_default: bool = False) -> dict[str, Any] | None:
-        folder = next((item for item in self.folders() if item.get("title") == title), None)
-        if folder:
+    def agent_notes_folder(self, create: bool = False) -> dict[str, Any] | None:
+        folder = next((item for item in self.folders() if item.get("title") == NOTEBOOK), None)
+        if folder or not create:
             return folder
-        if create_default and title == DEFAULT_NOTEBOOK:
-            return self.request("POST", "/folders", {"title": title})
-        return None
+        created = self.request("POST", "/folders", {"title": NOTEBOOK})
+        self.folders(refresh=True)
+        return created
+
+
+def folder_descendants(folders: list[dict[str, Any]], roots: set[str]) -> set[str]:
+    allowed = set(roots)
+    changed = True
+    while changed:
+        changed = False
+        for folder in folders:
+            if folder.get("parent_id") in allowed and folder.get("id") not in allowed:
+                allowed.add(folder["id"])
+                changed = True
+    return allowed
+
+
+def scoped_folder_ids(client: JoplinClient) -> set[str]:
+    """Folder IDs the skill may touch: Agent Notes and its descendants.
+
+    Configured included_folders/excluded_folders may only narrow this scope,
+    never widen it.
+    """
+    root = client.agent_notes_folder()
+    if root is None:
+        fail(f'Notebook "{NOTEBOOK}" does not exist. Create a note first to create it.')
+    folders = client.folders()
+    allowed = folder_descendants(folders, {root["id"]})
+    by_title = {folder.get("title"): folder.get("id") for folder in folders}
+    included = [name for name in (client.cfg.get("included_folders") or []) if name in by_title]
+    if included:
+        allowed &= folder_descendants(folders, {by_title[name] for name in included})
+    excluded = [name for name in (client.cfg.get("excluded_folders") or []) if name in by_title]
+    if excluded:
+        allowed -= folder_descendants(folders, {by_title[name] for name in excluded})
+    if not allowed:
+        fail(
+            f'Folder filters in ~/.joplinrc exclude the entire "{NOTEBOOK}" notebook. '
+            "Adjust included_folders/excluded_folders."
+        )
+    return allowed
+
+
+NOTE_FIELDS = "id,title,body,parent_id,created_time,updated_time"
+
+
+def fetch_scoped_note(client: JoplinClient, note_id: str) -> dict[str, Any]:
+    """Fetch a note by ID, refusing anything outside the Agent Notes scope."""
+    note = client.request("GET", f"/notes/{urllib.parse.quote(note_id)}?fields={NOTE_FIELDS}")
+    if not note:
+        fail(f"Note {note_id} not found")
+    if note.get("parent_id") not in scoped_folder_ids(client):
+        folders = {folder["id"]: folder.get("title", "") for folder in client.folders()}
+        location = folders.get(note.get("parent_id"), "unknown notebook")
+        fail(
+            f'Note {note_id} is in "{location}", outside the "{NOTEBOOK}" notebook. '
+            "This skill only operates inside that notebook."
+        )
+    return note
 
 
 def local_timestamp() -> str:
@@ -136,66 +200,52 @@ def read_text(path: str) -> str:
         fail(f"Unable to read {path}: {exc}")
 
 
-def folder_descendants(folders: list[dict[str, Any]], roots: set[str]) -> set[str]:
-    allowed = set(roots)
-    changed = True
-    while changed:
-        changed = False
-        for folder in folders:
-            if folder.get("parent_id") in allowed and folder.get("id") not in allowed:
-                allowed.add(folder["id"])
-                changed = True
-    return allowed
-
-
-def allowed_folder_ids(client: JoplinClient) -> set[str] | None:
-    folders = client.folders()
-    by_title = {folder.get("title"): folder.get("id") for folder in folders}
-    included = client.cfg.get("included_folders") or []
-    excluded = client.cfg.get("excluded_folders") or []
-    all_ids = {folder["id"] for folder in folders}
-    if included:
-        roots = {by_title[name] for name in included if name in by_title}
-        allowed = folder_descendants(folders, roots)
-    else:
-        allowed = set(all_ids)
-    if excluded:
-        roots = {by_title[name] for name in excluded if name in by_title}
-        allowed -= folder_descendants(folders, roots)
-    return allowed
-
-
-def command_create(client: JoplinClient, args: argparse.Namespace) -> None:
-    folder = client.resolve_folder(args.notebook, create_default=True)
-    if folder is None:
-        fail(f'Notebook "{args.notebook}" does not exist. Create it explicitly before using it.')
+def metadata_block(client: JoplinClient, args: argparse.Namespace, timestamp: str) -> str:
     cfg = client.cfg
     tool = args.tool or cfg.get("default_tool") or cfg.get("default_agent") or detect_tool()
     model = args.model or cfg.get("default_model") or detect_model()
     keywords = ", ".join(parse_keywords(args.keywords))
     if args.note_type not in NOTE_TYPES:
         fail(f"Unsupported note type: {args.note_type}")
-    content = read_text(args.body_file)
-    metadata = (
-        f"**Created:** {local_timestamp()}\n"
+    return (
+        f"**Created:** {timestamp}\n"
         f"**Tool:** {tool}\n"
         f"**Model:** {model}\n"
         f"**Note Type:** {args.note_type}\n"
         f"**Keywords:** {keywords}"
     )
+
+
+def split_title(body: str, fallback_title: str) -> tuple[str, str]:
+    """Split a note body into its H1 line and everything after it."""
+    lines = body.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip():
+            if line.startswith("# "):
+                return line.rstrip(), "\n".join(lines[index + 1 :]).strip()
+            break
+    return f"# {fallback_title}", body.strip()
+
+
+def command_create(client: JoplinClient, args: argparse.Namespace) -> None:
+    folder = client.agent_notes_folder(create=True)
+    if folder is None:
+        fail(f'Unable to resolve or create the "{NOTEBOOK}" notebook.')
+    metadata = metadata_block(client, args, local_timestamp())
+    content = read_text(args.body_file)
     body = f"# {args.title}\n\n{metadata}\n\n{content}\n"
     note = client.request("POST", "/notes", {"title": args.title, "body": body, "parent_id": folder["id"]})
-    print(json.dumps({"id": note.get("id"), "title": args.title, "notebook": args.notebook}, indent=2))
+    print(json.dumps({"id": note.get("id"), "title": args.title, "notebook": NOTEBOOK}, indent=2))
 
 
 def command_search(client: JoplinClient, args: argparse.Namespace) -> None:
+    allowed = scoped_folder_ids(client)
     query = urllib.parse.quote(args.query)
-    notes = client.paged(f"/notes?query={query}&fields=id,title,body,parent_id,updated_time")
-    allowed = allowed_folder_ids(client)
+    notes = client.paged(f"/notes?query={query}&fields={NOTE_FIELDS}")
     folders = {folder["id"]: folder.get("title", "") for folder in client.folders()}
     results = []
     for note in notes:
-        if allowed is not None and note.get("parent_id") not in allowed:
+        if note.get("parent_id") not in allowed:
             continue
         excerpt = " ".join((note.get("body") or "").split())[:240]
         results.append({
@@ -210,54 +260,112 @@ def command_search(client: JoplinClient, args: argparse.Namespace) -> None:
     print(json.dumps(results, indent=2))
 
 
+def command_list(client: JoplinClient, args: argparse.Namespace) -> None:
+    allowed = scoped_folder_ids(client)
+    folders = {folder["id"]: folder.get("title", "") for folder in client.folders()}
+    notes = []
+    for folder_id in allowed:
+        notes.extend(client.paged(f"/folders/{folder_id}/notes?fields={NOTE_FIELDS}"))
+    notes.sort(key=lambda note: note.get("updated_time") or 0, reverse=True)
+    results = [
+        {
+            "id": note.get("id"),
+            "title": note.get("title"),
+            "notebook": folders.get(note.get("parent_id"), ""),
+            "updated_time": note.get("updated_time"),
+        }
+        for note in notes[: args.limit]
+    ]
+    print(json.dumps(results, indent=2))
+
+
 def command_get(client: JoplinClient, args: argparse.Namespace) -> None:
-    note = client.request("GET", f"/notes/{urllib.parse.quote(args.id)}?fields=id,title,body,parent_id,updated_time")
+    note = fetch_scoped_note(client, args.id)
+    folders = {folder["id"]: folder.get("title", "") for folder in client.folders()}
+    note["notebook"] = folders.get(note.get("parent_id"), "")
     print(json.dumps(note, indent=2))
 
 
 def command_update(client: JoplinClient, args: argparse.Namespace) -> None:
-    body = read_text(args.body_file)
+    note = fetch_scoped_note(client, args.id)
+    content = read_text(args.body_file)
+    timestamp = local_timestamp()
+    title_line, existing = split_title(note.get("body") or "", note.get("title") or args.title or "Untitled")
+
+    if args.mode == "replace":
+        body = f"{title_line}\n\n{content}\n"
+    else:
+        metadata = metadata_block(client, args, timestamp)
+        section_title = args.section_title or f"Update — {timestamp}"
+        entry = f"## {section_title}\n\n{metadata}\n\n{content}"
+        body = f"{title_line}\n\n{entry}\n" if not existing else f"{title_line}\n\n{entry}\n\n---\n\n{existing}\n"
+
     payload: dict[str, Any] = {"body": body}
     if args.title:
         payload["title"] = args.title
-    note = client.request("PUT", f"/notes/{urllib.parse.quote(args.id)}", payload)
-    print(json.dumps(note or {"id": args.id, "updated": True}, indent=2))
+    client.request("PUT", f"/notes/{urllib.parse.quote(args.id)}", payload)
+    print(json.dumps({
+        "id": args.id,
+        "title": payload.get("title", note.get("title")),
+        "notebook": NOTEBOOK,
+        "mode": args.mode,
+        "updated": True,
+    }, indent=2))
 
 
 def command_delete(client: JoplinClient, args: argparse.Namespace) -> None:
+    note = fetch_scoped_note(client, args.id)
     if not args.confirm:
-        fail("Deletion requires --confirm")
+        fail(f'Deletion of "{note.get("title")}" requires --confirm')
     client.request("DELETE", f"/notes/{urllib.parse.quote(args.id)}")
-    print(json.dumps({"id": args.id, "deleted": True}, indent=2))
+    print(json.dumps({"id": args.id, "title": note.get("title"), "deleted": True}, indent=2))
+
+
+def add_metadata_arguments(parser: argparse.ArgumentParser, required: bool) -> None:
+    parser.add_argument("--note-type", required=required, choices=sorted(NOTE_TYPES))
+    parser.add_argument("--keywords", required=required)
+    parser.add_argument("--tool")
+    parser.add_argument("--model")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    create = subparsers.add_parser("create", help="Create a structured Joplin note")
+    create = subparsers.add_parser("create", help=f'Create a note in the "{NOTEBOOK}" notebook')
     create.add_argument("--title", required=True)
     create.add_argument("--body-file", required=True)
-    create.add_argument("--notebook", default=DEFAULT_NOTEBOOK)
-    create.add_argument("--note-type", required=True, choices=sorted(NOTE_TYPES))
-    create.add_argument("--keywords", required=True)
-    create.add_argument("--tool")
-    create.add_argument("--model")
+    add_metadata_arguments(create, required=True)
     create.set_defaults(func=command_create)
 
-    search = subparsers.add_parser("search", help="Search notes")
+    search = subparsers.add_parser("search", help=f'Search notes inside "{NOTEBOOK}"')
     search.add_argument("--query", required=True)
     search.add_argument("--limit", type=int, default=5)
     search.set_defaults(func=command_search)
+
+    listing = subparsers.add_parser("list", help=f'List recent notes inside "{NOTEBOOK}"')
+    listing.add_argument("--limit", type=int, default=20)
+    listing.set_defaults(func=command_list)
 
     get = subparsers.add_parser("get", help="Get a note by ID")
     get.add_argument("--id", required=True)
     get.set_defaults(func=command_get)
 
-    update = subparsers.add_parser("update", help="Update a note by ID")
+    update = subparsers.add_parser(
+        "update",
+        help="Prepend a dated journal section to a note (default) or replace its body",
+    )
     update.add_argument("--id", required=True)
     update.add_argument("--body-file", required=True)
-    update.add_argument("--title")
+    update.add_argument("--title", help="Rename the note (rarely needed)")
+    update.add_argument(
+        "--mode",
+        choices=("append-section", "replace"),
+        default="append-section",
+        help="append-section prepends a new dated section; replace rewrites the whole body",
+    )
+    update.add_argument("--section-title", help='Section heading; defaults to "Update — <timestamp>"')
+    add_metadata_arguments(update, required=False)
     update.set_defaults(func=command_update)
 
     delete = subparsers.add_parser("delete", help="Delete a note by ID")
@@ -268,8 +376,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def validate(args: argparse.Namespace) -> None:
+    if args.command == "update" and args.mode == "append-section":
+        missing = [name for name in ("note_type", "keywords") if not getattr(args, name)]
+        if missing:
+            fail(
+                "append-section updates require --note-type and --keywords for the new section header"
+            )
+
+
 def main() -> None:
     args = build_parser().parse_args()
+    validate(args)
     client = JoplinClient(load_config())
     args.func(client, args)
 

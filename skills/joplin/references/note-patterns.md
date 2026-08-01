@@ -2,6 +2,8 @@
 
 Use these as adaptive patterns, not mandatory templates. Omit sections that do not add value.
 
+Notes are journals. The patterns below apply to a single entry, whether it is the note's first entry or a later section appended to the top. Scope each entry's structure to the material it adds: a later entry on the same topic is usually smaller than the first one and often needs only two or three sections. Use H3 headings inside a journal section so they nest under the section's H2 heading.
+
 ## Technical explanation
 
 - Summary
