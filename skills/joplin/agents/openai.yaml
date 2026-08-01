@@ -1,0 +1,3 @@
+interface:
+  display_name: "Joplin Notes"
+  short_description: "Create durable technical notes in Joplin"
