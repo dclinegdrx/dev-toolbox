@@ -58,13 +58,21 @@ checkout_date() {
   fi
 }
 
-printf '%-12s | %-8s | %-12s | %s\n' "JIRA" "SIZE" "CHECKED OUT" "DIRECTORY"
+state_rank() {
+  case "$1" in
+    cleanup) printf '%s' 1 ;;
+    keep) printf '%s' 2 ;;
+    unknown) printf '%s' 3 ;;
+    no\ ticket) printf '%s' 4 ;;
+  esac
+}
 
 declare -a jiras=()
 declare -a sizes=()
 declare -a dates=()
 declare -a directories=()
 declare -a basenames=()
+declare -a unique_jiras=()
 
 while IFS= read -r -d '' directory; do
   basename="${directory##*/}"
@@ -88,18 +96,111 @@ while IFS= read -r -d '' directory; do
   dates+=("$(checkout_date "$directory")")
   directories+=("$directory")
   basenames+=("$basename")
+
+  if [ "$jira" != "-" ]; then
+    seen=0
+    for ((i = 0; i < ${#unique_jiras[@]}; i++)); do
+      [ "${unique_jiras[i]}" = "$jira" ] && seen=1
+    done
+    [ "$seen" -eq 1 ] || unique_jiras+=("$jira")
+  fi
 done < <(find "$root" -mindepth 1 -maxdepth 1 -type d -iname '*review*' -print0)
+
+printf '%-12s | %-10s | %-18s | %-8s | %-12s | %s\n' \
+  "JIRA" "STATE" "STATUS" "SIZE" "CHECKED OUT" "DIRECTORY"
 
 if [ "${#directories[@]}" -eq 0 ]; then
   echo "No review directories found."
   exit 0
 fi
 
-# Sort largest first, then make equal-sized rows stable by directory basename.
+declare -a returned_jiras=()
+declare -a categories=()
+declare -a returned_statuses=()
+query_failed=0
+
+if [ "${#unique_jiras[@]}" -gt 0 ]; then
+  for command in acli jq; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+      echo "Required command not found: $command" >&2
+      exit 1
+    fi
+  done
+
+  jql="key in ("
+  for ((i = 0; i < ${#unique_jiras[@]}; i++)); do
+    [ "$i" -eq 0 ] || jql+=", "
+    jql+="\"${unique_jiras[i]}\""
+  done
+  jql+=")"
+
+  if ! query_output="$(acli jira workitem search --jql "$jql" --fields 'key,status,summary' --limit "${#unique_jiras[@]}" --json)"; then
+    query_failed=1
+    echo "Jira query failed; ticket-bearing directories are marked unknown." >&2
+  elif ! printf '%s' "$query_output" | jq -e . >/dev/null 2>&1; then
+    query_failed=1
+    echo "Jira query returned malformed JSON; ticket-bearing directories are marked unknown." >&2
+  else
+    while IFS=$'\t' read -r returned_jira category returned_status; do
+      returned_jiras+=("$returned_jira")
+      categories+=("$category")
+      returned_statuses+=("$returned_status")
+    done < <(printf '%s' "$query_output" | jq -r '
+      if type == "array" then .[]
+      elif (.issues | type) == "array" then .issues[]
+      else empty
+      end
+      | [.key, (.fields.status.statusCategory.key // ""), (.fields.status.name // "-")]
+      | @tsv
+    ')
+  fi
+fi
+
+declare -a states=()
+declare -a statuses=()
+declare -a ranks=()
+
+for ((i = 0; i < ${#directories[@]}; i++)); do
+  state=""
+  status=""
+  if [ "${jiras[i]}" = "-" ]; then
+    state="no ticket"
+    status="No Jira key"
+  elif [ "$query_failed" -eq 1 ]; then
+    state="unknown"
+    status="Query failed"
+  else
+    found=0
+    for ((j = 0; j < ${#returned_jiras[@]}; j++)); do
+      if [ "${returned_jiras[j]}" = "${jiras[i]}" ]; then
+        found=1
+        status="${returned_statuses[j]}"
+        if [ "${categories[j]}" = "done" ]; then
+          state="cleanup"
+        else
+          state="keep"
+        fi
+        break
+      fi
+    done
+    if [ "$found" -eq 0 ]; then
+      state="unknown"
+      status="Not found"
+    fi
+  fi
+  states+=("$state")
+  statuses+=("$status")
+  ranks+=("$(state_rank "$state")")
+done
+
+# Group by safety state first, then use raw KiB and basename for stable ordering.
 for ((i = 0; i < ${#directories[@]} - 1; i++)); do
   for ((j = i + 1; j < ${#directories[@]}; j++)); do
-    if [ "${sizes[i]}" -lt "${sizes[j]}" ] || { [ "${sizes[i]}" -eq "${sizes[j]}" ] && [[ "${basenames[i]}" > "${basenames[j]}" ]]; }; then
+    if [ "${ranks[i]}" -gt "${ranks[j]}" ] || { [ "${ranks[i]}" -eq "${ranks[j]}" ] && { [ "${sizes[i]}" -lt "${sizes[j]}" ] || { [ "${sizes[i]}" -eq "${sizes[j]}" ] && [[ "${basenames[i]}" > "${basenames[j]}" ]]; }; }; }; then
       temp="${jiras[i]}"; jiras[i]="${jiras[j]}"; jiras[j]="$temp"
+      temp="${states[i]}"; states[i]="${states[j]}"; states[j]="$temp"
+      temp="${statuses[i]}"; statuses[i]="${statuses[j]}"; statuses[j]="$temp"
+      temp="${ranks[i]}"; ranks[i]="${ranks[j]}"; ranks[j]="$temp"
       temp="${sizes[i]}"; sizes[i]="${sizes[j]}"; sizes[j]="$temp"
       temp="${dates[i]}"; dates[i]="${dates[j]}"; dates[j]="$temp"
       temp="${directories[i]}"; directories[i]="${directories[j]}"; directories[j]="$temp"
@@ -108,10 +209,51 @@ for ((i = 0; i < ${#directories[@]} - 1; i++)); do
   done
 done
 
+cleanup_count=0
+keep_count=0
+unknown_count=0
+no_ticket_count=0
+cleanup_kib=0
+
 for ((i = 0; i < ${#directories[@]}; i++)); do
-  printf '%-12s | %-8s | %-12s | %s\n' \
+  printf '%-12s | %-10s | %-18s | %-8s | %-12s | %s\n' \
     "${jiras[i]}" \
+    "${states[i]}" \
+    "${statuses[i]}" \
     "$(format_size "${sizes[i]}")" \
     "${dates[i]}" \
     "${basenames[i]}"
+
+  case "${states[i]}" in
+    cleanup)
+      cleanup_count=$((cleanup_count + 1))
+      cleanup_kib=$((cleanup_kib + sizes[i]))
+      ;;
+    keep) keep_count=$((keep_count + 1)) ;;
+    unknown) unknown_count=$((unknown_count + 1)) ;;
+    no\ ticket) no_ticket_count=$((no_ticket_count + 1)) ;;
+  esac
 done
+
+printf '\nSummary\n'
+printf 'Review directories: %s\n' "${#directories[@]}"
+printf 'cleanup: %s\n' "$cleanup_count"
+printf 'keep: %s\n' "$keep_count"
+printf 'unknown: %s\n' "$unknown_count"
+printf 'no ticket: %s\n' "$no_ticket_count"
+printf 'Potential space reclaimed: %s\n' "$(format_size "$cleanup_kib")"
+
+printf '\nCleanup\n'
+if [ "$cleanup_count" -eq 0 ]; then
+  echo "None."
+else
+  jira_site="${JIRA_SITE:-goodrx-dev.atlassian.net}"
+  for ((i = 0; i < ${#directories[@]}; i++)); do
+    if [ "${states[i]}" = "cleanup" ]; then
+      printf '%s | https://%s/browse/%s\n' \
+        "${basenames[i]}" "$jira_site" "${jiras[i]}"
+    fi
+  done
+fi
+
+[ "$query_failed" -eq 0 ] || exit 1
