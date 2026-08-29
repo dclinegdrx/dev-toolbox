@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export LC_ALL=C
+
+if [ "$#" -gt 1 ]; then
+  echo "Usage: wtcleanup [root]" >&2
+  exit 1
+fi
+
+config_file="${XDG_CONFIG_HOME:-$HOME/.config}/dev-toolbox/wt.env"
+# shellcheck disable=SC1090
+[ -f "$config_file" ] && . "$config_file"
+
+root="${1:-${WTDEV_ROOT:-${WTMUX_ROOT:-$HOME/src}}}"
+
+if [ ! -d "$root" ]; then
+  echo "Worktree root is not a directory: $root" >&2
+  exit 1
+fi
+
+format_size() {
+  local kib="$1"
+  local factor=1
+  local unit="K"
+  local whole
+  local tenth
+
+  if [ "$kib" -ge 1073741824 ]; then
+    factor=1073741824
+    unit="T"
+  elif [ "$kib" -ge 1048576 ]; then
+    factor=1048576
+    unit="G"
+  elif [ "$kib" -ge 1024 ]; then
+    factor=1024
+    unit="M"
+  fi
+
+  if [ "$factor" -eq 1 ]; then
+    printf '%sK' "$kib"
+    return
+  fi
+
+  whole=$((kib / factor))
+  tenth=$(( ((kib % factor) * 10 + factor / 2) / factor ))
+  if [ "$tenth" -eq 10 ]; then
+    whole=$((whole + 1))
+    tenth=0
+  fi
+  printf '%s.%s%s' "$whole" "$tenth" "$unit"
+}
+
+checkout_date() {
+  if [ "$(uname)" = "Darwin" ]; then
+    stat -f '%SB' -t '%Y-%m-%d' "$1" 2>/dev/null || printf '%s' '-'
+  else
+    printf '%s' '-'
+  fi
+}
+
+printf '%-12s | %-8s | %-12s | %s\n' "JIRA" "SIZE" "CHECKED OUT" "DIRECTORY"
+
+declare -a jiras=()
+declare -a sizes=()
+declare -a dates=()
+declare -a directories=()
+declare -a basenames=()
+
+while IFS= read -r -d '' directory; do
+  basename="${directory##*/}"
+  jira="-"
+  shopt -s nocasematch
+  if [[ "$basename" =~ [A-Z][A-Z0-9]+-[0-9]+ ]]; then
+    jira="$(printf '%s' "${BASH_REMATCH[0]}" | tr '[:lower:]' '[:upper:]')"
+  fi
+  shopt -u nocasematch
+
+  size_kib="$(du -sk "$directory" | awk 'NR == 1 { print $1 }')"
+  case "$size_kib" in
+    ''|*[!0-9]*)
+      echo "Could not determine directory size: $directory" >&2
+      exit 1
+      ;;
+  esac
+
+  jiras+=("$jira")
+  sizes+=("$size_kib")
+  dates+=("$(checkout_date "$directory")")
+  directories+=("$directory")
+  basenames+=("$basename")
+done < <(find "$root" -mindepth 1 -maxdepth 1 -type d -iname '*review*' -print0)
+
+if [ "${#directories[@]}" -eq 0 ]; then
+  echo "No review directories found."
+  exit 0
+fi
+
+# Sort largest first, then make equal-sized rows stable by directory basename.
+for ((i = 0; i < ${#directories[@]} - 1; i++)); do
+  for ((j = i + 1; j < ${#directories[@]}; j++)); do
+    if [ "${sizes[i]}" -lt "${sizes[j]}" ] || { [ "${sizes[i]}" -eq "${sizes[j]}" ] && [[ "${basenames[i]}" > "${basenames[j]}" ]]; }; then
+      temp="${jiras[i]}"; jiras[i]="${jiras[j]}"; jiras[j]="$temp"
+      temp="${sizes[i]}"; sizes[i]="${sizes[j]}"; sizes[j]="$temp"
+      temp="${dates[i]}"; dates[i]="${dates[j]}"; dates[j]="$temp"
+      temp="${directories[i]}"; directories[i]="${directories[j]}"; directories[j]="$temp"
+      temp="${basenames[i]}"; basenames[i]="${basenames[j]}"; basenames[j]="$temp"
+    fi
+  done
+done
+
+for ((i = 0; i < ${#directories[@]}; i++)); do
+  printf '%-12s | %-8s | %-12s | %s\n' \
+    "${jiras[i]}" \
+    "$(format_size "${sizes[i]}")" \
+    "${dates[i]}" \
+    "${basenames[i]}"
+done
