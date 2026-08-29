@@ -17,6 +17,7 @@ if [ ! -d "$root" ]; then
   echo "Worktree root is not a directory: $root" >&2
   exit 1
 fi
+root="$(cd "$root" && pwd -P)"
 
 format_size() {
   local kib="$1"
@@ -67,6 +68,89 @@ state_rank() {
   esac
 }
 
+format_review_date() {
+  local milliseconds="$1"
+  local seconds
+  local formatted
+
+  case "$milliseconds" in
+    ''|*[!0-9]*) printf '%s' '-' ; return ;;
+  esac
+  seconds=$((milliseconds / 1000))
+
+  if formatted="$(date -r "$seconds" '+%Y-%m-%d' 2>/dev/null)"; then
+    printf '%s' "$formatted"
+  elif formatted="$(date -d "@$seconds" '+%Y-%m-%d' 2>/dev/null)"; then
+    printf '%s' "$formatted"
+  else
+    printf '%s' '-'
+  fi
+}
+
+load_review_dates() {
+  local all_records=""
+  local cursor=""
+  local encoded_cursor
+  local endpoint
+  local page
+  local page_records
+  local next_cursor
+  local location
+  local updated
+  local seen_cursor=""
+
+  if ! command -v opencode2 >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    return 1
+  fi
+
+  while :; do
+    endpoint="/api/session?limit=100&order=desc"
+    if [ -n "$cursor" ]; then
+      encoded_cursor="$(printf '%s' "$cursor" | jq -sRr '@uri')" || return 1
+      endpoint+="&cursor=$encoded_cursor"
+    fi
+
+    if ! page="$(opencode2 api get "$endpoint" 2>/dev/null)"; then
+      return 1
+    fi
+    if ! printf '%s' "$page" | jq -e '
+      (.data | type) == "array"
+      and (.cursor | type) == "object"
+      and ((.cursor.next | type) == "string" or .cursor.next == null)
+    ' >/dev/null 2>&1; then
+      return 1
+    fi
+
+    page_records="$(printf '%s' "$page" | jq -r '
+      .data[]
+      | select((.location.directory | type) == "string" and (.time.updated | type) == "number")
+      | [.location.directory, (.time.updated | floor)]
+      | @tsv
+    ')" || return 1
+    all_records+="$page_records"$'\n'
+
+    next_cursor="$(printf '%s' "$page" | jq -r '.cursor.next // empty')" || return 1
+    [ -n "$next_cursor" ] || break
+    case "|$seen_cursor|" in
+      *"|$next_cursor|"*) return 1 ;;
+    esac
+    seen_cursor+="|$next_cursor"
+    cursor="$next_cursor"
+  done
+
+  for ((i = 0; i < ${#directories[@]}; i++)); do
+    review_updated=0
+    while IFS=$'\t' read -r location updated; do
+      if [ "$location" = "${directories[i]}" ] && [ "$updated" -gt "$review_updated" ]; then
+        review_updated="$updated"
+      fi
+    done <<< "$all_records"
+    if [ "$review_updated" -gt 0 ]; then
+      review_dates[i]="$(format_review_date "$review_updated")"
+    fi
+  done
+}
+
 declare -a jiras=()
 declare -a sizes=()
 declare -a dates=()
@@ -106,8 +190,8 @@ while IFS= read -r -d '' directory; do
   fi
 done < <(find "$root" -mindepth 1 -maxdepth 1 -type d -iname '*review*' -print0)
 
-printf '%-12s | %-10s | %-18s | %-8s | %-12s | %s\n' \
-  "JIRA" "STATE" "STATUS" "SIZE" "CHECKED OUT" "DIRECTORY"
+printf '%-12s | %-10s | %-18s | %-8s | %-12s | %-12s | %s\n' \
+  "JIRA" "STATE" "STATUS" "SIZE" "CHECKED OUT" "LAST REVIEW" "DIRECTORY"
 
 if [ "${#directories[@]}" -eq 0 ]; then
   echo "No review directories found."
@@ -159,6 +243,7 @@ fi
 declare -a states=()
 declare -a statuses=()
 declare -a ranks=()
+declare -a review_dates=()
 
 for ((i = 0; i < ${#directories[@]}; i++)); do
   state=""
@@ -191,7 +276,12 @@ for ((i = 0; i < ${#directories[@]}; i++)); do
   states+=("$state")
   statuses+=("$status")
   ranks+=("$(state_rank "$state")")
+  review_dates+=("-")
 done
+
+if ! load_review_dates; then
+  echo "OpenCode session history unavailable; LAST REVIEW is unavailable." >&2
+fi
 
 # Group by safety state first, then use raw KiB and basename for stable ordering.
 for ((i = 0; i < ${#directories[@]} - 1; i++)); do
@@ -203,6 +293,7 @@ for ((i = 0; i < ${#directories[@]} - 1; i++)); do
       temp="${ranks[i]}"; ranks[i]="${ranks[j]}"; ranks[j]="$temp"
       temp="${sizes[i]}"; sizes[i]="${sizes[j]}"; sizes[j]="$temp"
       temp="${dates[i]}"; dates[i]="${dates[j]}"; dates[j]="$temp"
+      temp="${review_dates[i]}"; review_dates[i]="${review_dates[j]}"; review_dates[j]="$temp"
       temp="${directories[i]}"; directories[i]="${directories[j]}"; directories[j]="$temp"
       temp="${basenames[i]}"; basenames[i]="${basenames[j]}"; basenames[j]="$temp"
     fi
@@ -216,12 +307,13 @@ no_ticket_count=0
 cleanup_kib=0
 
 for ((i = 0; i < ${#directories[@]}; i++)); do
-  printf '%-12s | %-10s | %-18s | %-8s | %-12s | %s\n' \
+  printf '%-12s | %-10s | %-18s | %-8s | %-12s | %-12s | %s\n' \
     "${jiras[i]}" \
     "${states[i]}" \
     "${statuses[i]}" \
     "$(format_size "${sizes[i]}")" \
     "${dates[i]}" \
+    "${review_dates[i]}" \
     "${basenames[i]}"
 
   case "${states[i]}" in
