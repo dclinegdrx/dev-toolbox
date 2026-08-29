@@ -2,10 +2,12 @@
 
 Development workflow tools, scripts, and agent helpers.
 
-This repo starts with two git worktree + tmux helpers:
+This repo includes git worktree + tmux helpers and a read-only review-worktree report:
 
 - `wtdev`: create or reuse a worktree for feature work, open a tmux window for it, and optionally launch an agent command.
 - `wtreview`: create or reuse an isolated review worktree from a remote branch, open a tmux window for it, and optionally launch an agent command.
+
+- `wtcleanup`: identify local review worktrees whose Jira tickets are Done, without changing them.
 
 ## Which command should I use?
 
@@ -36,6 +38,8 @@ For new `wtdev` branches, the local branch is intentionally left without an upst
 - `git`
 - `tmux`
 
+`wtcleanup` also requires Bash, authenticated `acli`, and `jq`.
+
 ## Install
 
 Clone the repo and symlink the commands into a directory on your `PATH`:
@@ -45,6 +49,7 @@ git clone git@github.com:dclinegdrx/dev-toolbox.git ~/src/dev-toolbox
 mkdir -p ~/bin ~/.config/dev-toolbox
 ln -s ~/src/dev-toolbox/bin/wtdev ~/bin/wtdev
 ln -s ~/src/dev-toolbox/bin/wtreview ~/bin/wtreview
+ln -s ~/src/dev-toolbox/bin/wtcleanup ~/bin/wtcleanup
 cp ~/src/dev-toolbox/config/wt.env.example ~/.config/dev-toolbox/wt.env
 ```
 
@@ -109,6 +114,60 @@ Use a custom local review branch name:
 ```bash
 wtreview app feature/some-change review-some-change
 ```
+
+## wtcleanup
+
+`wtcleanup` identifies local review worktrees whose Jira tickets are Done. It is a read-only report: it scans immediate child directories containing `review`, looks up their Jira keys in one batch, and does not alter local or remote state.
+
+### Usage
+
+```bash
+wtcleanup
+wtcleanup /Users/derek.cline/src/GoodRx
+```
+
+The scan root resolves in this order:
+
+1. Positional root argument
+2. `WTDEV_ROOT`
+3. `WTMUX_ROOT`
+4. `$HOME/src`
+
+The report uses these states:
+
+- `cleanup`: the Jira ticket is in Jira's Done status category.
+- `keep`: the Jira ticket exists but is not Done.
+- `unknown`: the Jira key was not returned, or the Jira query failed.
+- `no ticket`: no Jira-shaped key was found in the directory name.
+
+`CHECKED OUT` is the directory creation date on macOS when available, otherwise `-`. `LAST REVIEW` is the most recent OpenCode session update for that exact normalized worktree path, otherwise `-`.
+
+Rows are ordered by state (`cleanup`, `keep`, `unknown`, `no ticket`), then by raw directory size from largest to smallest within each state. The summary counts every review directory and shows the raw-KiB total that `cleanup` rows could reclaim. The `Cleanup` section lists each cleanup candidate with a clickable Jira browse link for verification.
+
+Illustrative output:
+
+```text
+JIRA         | STATE      | STATUS             | SIZE     | CHECKED OUT  | LAST REVIEW  | DIRECTORY
+DEMO-123     | cleanup    | Done               | 2.0M     | 2026-01-02   | 2026-01-10   | app-review-DEMO-123-fix
+DEMO-456     | keep       | In Progress        | 512K     | 2026-01-05   | -            | app-review-DEMO-456-feature
+DEMO-789     | unknown    | Not found          | 128K     | 2026-01-07   | -            | app-review-DEMO-789-old
+-            | no ticket  | No Jira key        | 64K      | 2026-01-08   | -            | app-review-scratch
+
+Summary
+Review directories: 4
+cleanup: 1
+keep: 1
+unknown: 1
+no ticket: 1
+Potential space reclaimed: 2.0M
+
+Cleanup
+app-review-DEMO-123-fix | https://goodrx-dev.atlassian.net/browse/DEMO-123
+```
+
+If Jira cannot be queried, ticket-bearing rows remain in the report as `unknown` with `Query failed` and the command exits nonzero. OpenCode session-history enrichment is optional: unavailable or malformed history leaves `LAST REVIEW` as `-`, prints a warning, and does not change the command's exit status.
+
+V1 is entirely read-only. It does not remove worktrees, branches, directories, tmux windows, Jira tickets, or OpenCode sessions. Interactive cleanup may be added later, but is not implemented now.
 
 ## Behavior
 
