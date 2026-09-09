@@ -9,6 +9,9 @@ This repo includes git worktree + tmux helpers and a read-only review-worktree r
 
 - `wtcleanup`: identify local review worktrees whose Jira tickets are Done, without changing them.
 
+It also includes an [OpenCode phased development workflow](opencode/README.md)
+with reusable agents, slash commands, and a phase-implementation skill.
+
 ## Which command should I use?
 
 Use `wtdev` when you are doing your own development work.
@@ -54,6 +57,18 @@ cp ~/src/dev-toolbox/config/wt.env.example ~/.config/dev-toolbox/wt.env
 ```
 
 Make sure `~/bin` is on your `PATH`.
+
+### OpenCode workflow
+
+Install the optional OpenCode V2 workflow separately:
+
+```bash
+cd ~/src/dev-toolbox
+./opencode/install.sh
+```
+
+See [opencode/README.md](opencode/README.md) for requirements, the workflow,
+and update instructions.
 
 ## Configure
 
