@@ -1,18 +1,37 @@
 # dev-toolbox
 
-Development workflow tools, scripts, and agent helpers.
+Development workflow tools and agent configuration.
 
-This repo includes git worktree + tmux helpers and a read-only review-worktree report:
+This repository contains two independent pieces. Adopt either one without
+installing the other:
 
-- `wtdev`: create or reuse a worktree for feature work, open a tmux window for it, and optionally launch an agent command.
-- `wtreview`: create or reuse an isolated review worktree from a remote branch, open a tmux window for it, and optionally launch an agent command.
+- **Git worktree development workflow** — shell commands for creating feature
+  and review worktrees, opening matching tmux windows, and reporting on stale
+  review worktrees. Start with [Git worktree development workflow](#git-worktree-development-workflow).
+- **OpenCode configuration** — reusable OpenCode V2 agents, slash commands, and
+  a phase-implementation skill. Start with [OpenCode configuration](#opencode-configuration)
+  and then read [`opencode/README.md`](opencode/README.md).
 
-- `wtcleanup`: identify local review worktrees whose Jira tickets are Done, without changing them.
+Installing the worktree commands does not install the OpenCode configuration,
+and installing the OpenCode configuration does not install the worktree
+commands.
 
-It also includes an [OpenCode phased development workflow](opencode/README.md)
-with reusable agents, slash commands, and a phase-implementation skill.
+## Git worktree development workflow
 
-## Which command should I use?
+The worktree workflow consists of three shell commands:
+
+- `wtdev`: create or reuse a worktree for feature work, open a tmux window for
+  it, and optionally launch an agent command.
+- `wtreview`: create or reuse an isolated review worktree from a remote branch,
+  open a tmux window for it, and optionally launch an agent command.
+- `wtcleanup`: identify local review worktrees whose Jira tickets are Done,
+  without changing them.
+
+The core worktree commands do not depend on OpenCode. `wtcleanup` can optionally
+enrich its report with the most recent OpenCode session for each worktree, but
+it still works without OpenCode; unavailable session history is shown as `-`.
+
+### Which command should I use?
 
 Use `wtdev` when you are doing your own development work.
 
@@ -35,15 +54,16 @@ Neither command pushes branches to `origin`. They only fetch from `origin`, crea
 
 For new `wtdev` branches, the local branch is intentionally left without an upstream. You decide when and where to push it.
 
-## Requirements
+### Requirements
 
 - `bash`
 - `git`
 - `tmux`
 
-`wtcleanup` also requires Bash, authenticated `acli`, and `jq`.
+`wtcleanup` also requires an authenticated `acli` and `jq`. OpenCode is only
+needed if you want `wtcleanup` to include session-history dates.
 
-## Install
+### Install only the worktree commands
 
 Clone the repo and symlink the commands into a directory on your `PATH`:
 
@@ -58,19 +78,10 @@ cp ~/src/dev-toolbox/config/wt.env.example ~/.config/dev-toolbox/wt.env
 
 Make sure `~/bin` is on your `PATH`.
 
-### OpenCode workflow
+If you already cloned this repository, start with the `mkdir` command instead
+of cloning it again.
 
-Install the optional OpenCode V2 workflow separately:
-
-```bash
-cd ~/src/dev-toolbox
-./opencode/install.sh
-```
-
-See [opencode/README.md](opencode/README.md) for requirements, the workflow,
-and update instructions.
-
-## Configure
+### Configure
 
 Edit `~/.config/dev-toolbox/wt.env`:
 
@@ -86,7 +97,7 @@ Agent launch commands are optional. If `WTDEV_AGENT_CMD` and `WTREVIEW_AGENT_CMD
 
 Existing `WTMUX_ROOT` and `WTMUX_AGENT_CMD` settings are still honored as fallbacks, but new config should use `WTDEV_ROOT` and `WTDEV_AGENT_CMD`.
 
-## Usage
+### Usage
 
 Create or open a feature worktree for a new branch:
 
@@ -130,11 +141,11 @@ Use a custom local review branch name:
 wtreview app feature/some-change review-some-change
 ```
 
-## wtcleanup
+### `wtcleanup`
 
 `wtcleanup` identifies local review worktrees whose Jira tickets are Done. It is a read-only report: it scans immediate child directories containing `review`, looks up their Jira keys in one batch, and does not alter local or remote state.
 
-### Usage
+#### Usage
 
 ```bash
 wtcleanup
@@ -184,7 +195,7 @@ If Jira cannot be queried, ticket-bearing rows remain in the report as `unknown`
 
 V1 is entirely read-only. It does not remove worktrees, branches, directories, tmux windows, Jira tickets, or OpenCode sessions. Interactive cleanup may be added later, but is not implemented now.
 
-## Behavior
+### Behavior
 
 The scripts:
 
@@ -211,6 +222,41 @@ The scripts:
 - reuses an existing local review branch or worktree when present
 - it does not push the branch
 
-## Future Tools
+## OpenCode configuration
 
-Add shell commands under `bin/`. Future agent skills and related docs can live under `skills/`.
+The `opencode/` directory is a separate, installable OpenCode V2 package. It
+contains reusable workflow agents, `/workflow/*` slash commands, and the
+`phase-implementation` skill. It does not configure an AI provider,
+credentials, MCP servers, global permissions, or terminal preferences.
+
+### Install only the OpenCode configuration
+
+Clone this repository if needed, then run the installer:
+
+```bash
+git clone git@github.com:dclinegdrx/dev-toolbox.git ~/src/dev-toolbox
+cd ~/src/dev-toolbox
+./opencode/install.sh
+```
+
+The default install creates symlinks under `~/.config/opencode`, so pulling a
+new revision updates the installed definitions. To make a one-time independent
+copy instead, use:
+
+```bash
+./opencode/install.sh --copy
+```
+
+The OpenCode package has its own requirements, model configuration, workflow
+instructions, update steps, and removal instructions. Read
+[`opencode/README.md`](opencode/README.md) before using it.
+
+## Other contents
+
+The [`skills/README.md`](skills/README.md) documents standalone agent skills in
+this repository. The OpenCode phased-development skill intentionally lives
+under [`opencode/skills/`](opencode/skills/) with its matching agents and
+commands.
+
+Add future shell commands under `bin/` and keep their setup instructions with
+the relevant documentation.
