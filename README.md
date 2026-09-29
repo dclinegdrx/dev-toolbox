@@ -2,19 +2,21 @@
 
 Development workflow tools and agent configuration.
 
-This repository contains two independent pieces. Adopt either one without
-installing the other:
+This repository contains independent tool families. Adopt the worktree tools
+or phased-development workflow without installing the other:
 
 - **Git worktree development workflow** — shell commands for creating feature
   and review worktrees, opening matching tmux windows, and reporting on stale
   review worktrees. Start with [Git worktree development workflow](#git-worktree-development-workflow).
-- **OpenCode configuration** — reusable OpenCode V2 agents, slash commands, and
-  a phase-implementation skill. Start with [OpenCode configuration](#opencode-configuration)
-  and then read [`opencode/README.md`](opencode/README.md).
+- **Phased development workflow** — a shareable workflow for planning,
+  implementing, reviewing, committing, and integrating one phase at a time.
+  Start with the [shared workflow README](workflows/phased-development/README.md),
+  then choose [portable prompts](workflows/phased-development/prompts/README.md)
+  or the [OpenCode package](opencode/README.md).
 
-Installing the worktree commands does not install the OpenCode configuration,
-and installing the OpenCode configuration does not install the worktree
-commands.
+Installing the worktree commands does not install either phased-development
+implementation, and installing the OpenCode configuration does not install the
+worktree commands.
 
 ## Git worktree development workflow
 

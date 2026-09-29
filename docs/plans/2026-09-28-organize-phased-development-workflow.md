@@ -50,7 +50,7 @@ The worktree commands under `bin/` and standalone skills under `skills/` remain 
 
 ## Phase 1: Establish the shared workflow and portable-prompt implementation
 
-**Status: NOT STARTED**
+**Status: COMPLETE**
 
 ### Goal
 
