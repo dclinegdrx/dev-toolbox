@@ -87,7 +87,7 @@ Make the common phased workflow and its portable prompt implementation discovera
 
 ## Phase 2: Relocate the OpenCode implementation without changing its installed interface
 
-**Status: NOT STARTED**
+**Status: COMPLETE**
 
 ### Goal
 

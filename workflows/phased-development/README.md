@@ -35,9 +35,8 @@ commit.
 | Implementation | Use it when | Start here |
 | --- | --- | --- |
 | Portable prompts | You want launcher-neutral Markdown prompts for Alfred, another launcher, or manual copy/paste. | [Portable prompts](prompts/README.md) |
-| OpenCode package | You use OpenCode V2 and want installed slash commands, agents, and a skill. | [OpenCode package](../../opencode/README.md) |
+| OpenCode package | You use OpenCode V2 and want installed slash commands, agents, and a skill. | [OpenCode package](opencode/README.md) |
 
 The portable prompts are self-contained. The OpenCode package uses its own
-agents, commands, skill, and installation mechanics. The package remains at
-the repository root during this phase; it will be colocated with these prompts
-in a later change.
+agents, commands, skill, and installation mechanics. Both implementations are
+available under this workflow directory.

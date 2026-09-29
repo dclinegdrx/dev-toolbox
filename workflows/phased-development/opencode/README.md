@@ -38,7 +38,7 @@ The workflow roles are deliberately separated:
   duplicate that skill, because it is maintained separately.
 
 If your OpenCode model catalog uses different IDs, edit the `model:` field in
-each file under `opencode/agents/workflow/` before installing.
+each file under `agents/workflow/` before installing.
 
 ## Install
 
@@ -47,7 +47,7 @@ Clone this repository, then run the installer:
 ```bash
 git clone git@github.com:dclinegdrx/dev-toolbox.git ~/src/dev-toolbox
 cd ~/src/dev-toolbox
-./opencode/install.sh
+./workflows/phased-development/opencode/install.sh
 ```
 
 The default install uses symlinks:
@@ -63,7 +63,30 @@ The installer refuses to overwrite existing paths. For a one-time independent
 copy, use:
 
 ```bash
-./opencode/install.sh --copy
+./workflows/phased-development/opencode/install.sh --copy
+```
+
+### Migration from the root-level package
+
+Pulling the relocation removes the old root-level `opencode/` directory. An
+existing symlink installation can therefore point at a missing source until it
+is reinstalled. First verify that these are the three old workflow destinations:
+
+```bash
+ls -ld ~/.config/opencode/agents/workflow \
+  ~/.config/opencode/commands/workflow \
+  ~/.config/opencode/skills/phase-implementation
+```
+
+After verifying those exact paths belong to the old workflow installation,
+remove only them and reinstall. Do not remove the broader `~/.config/opencode`
+directory.
+
+```bash
+rm -rf ~/.config/opencode/agents/workflow \
+  ~/.config/opencode/commands/workflow \
+  ~/.config/opencode/skills/phase-implementation
+./workflows/phased-development/opencode/install.sh
 ```
 
 ## Workflow
@@ -116,9 +139,9 @@ git -C ~/src/dev-toolbox pull --ff-only
 To remove a symlink installation:
 
 ```bash
-rm ~/.config/opencode/agents/workflow
-rm ~/.config/opencode/commands/workflow
-rm ~/.config/opencode/skills/phase-implementation
+rm -rf ~/.config/opencode/agents/workflow
+rm -rf ~/.config/opencode/commands/workflow
+rm -rf ~/.config/opencode/skills/phase-implementation
 ```
 
 For copied installs, remove the directories and run the installer again after

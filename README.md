@@ -12,7 +12,7 @@ or phased-development workflow without installing the other:
   implementing, reviewing, committing, and integrating one phase at a time.
   Start with the [shared workflow README](workflows/phased-development/README.md),
   then choose [portable prompts](workflows/phased-development/prompts/README.md)
-  or the [OpenCode package](opencode/README.md).
+  or the [OpenCode package](workflows/phased-development/opencode/README.md).
 
 Installing the worktree commands does not install either phased-development
 implementation, and installing the OpenCode configuration does not install the
@@ -226,10 +226,11 @@ The scripts:
 
 ## OpenCode configuration
 
-The `opencode/` directory is a separate, installable OpenCode V2 package. It
-contains reusable workflow agents, `/workflow/*` slash commands, and the
-`phase-implementation` skill. It does not configure an AI provider,
-credentials, MCP servers, global permissions, or terminal preferences.
+The `workflows/phased-development/opencode/` directory is a separate,
+installable OpenCode V2 package. It contains reusable workflow agents,
+`/workflow/*` slash commands, and the `phase-implementation` skill. It does
+not configure an AI provider, credentials, MCP servers, global permissions, or
+terminal preferences.
 
 ### Install only the OpenCode configuration
 
@@ -238,7 +239,7 @@ Clone this repository if needed, then run the installer:
 ```bash
 git clone git@github.com:dclinegdrx/dev-toolbox.git ~/src/dev-toolbox
 cd ~/src/dev-toolbox
-./opencode/install.sh
+./workflows/phased-development/opencode/install.sh
 ```
 
 The default install creates symlinks under `~/.config/opencode`, so pulling a
@@ -246,19 +247,21 @@ new revision updates the installed definitions. To make a one-time independent
 copy instead, use:
 
 ```bash
-./opencode/install.sh --copy
+./workflows/phased-development/opencode/install.sh --copy
 ```
 
 The OpenCode package has its own requirements, model configuration, workflow
 instructions, update steps, and removal instructions. Read
-[`opencode/README.md`](opencode/README.md) before using it.
+[`workflows/phased-development/opencode/README.md`](workflows/phased-development/opencode/README.md)
+before using it. Existing installations from before the relocation must be
+removed and reinstalled; see the package README's migration instructions.
 
 ## Other contents
 
 The [`skills/README.md`](skills/README.md) documents standalone agent skills in
 this repository. The OpenCode phased-development skill intentionally lives
-under [`opencode/skills/`](opencode/skills/) with its matching agents and
-commands.
+under [`workflows/phased-development/opencode/skills/`](workflows/phased-development/opencode/skills/)
+with its matching agents and commands.
 
 Add future shell commands under `bin/` and keep their setup instructions with
 the relevant documentation.

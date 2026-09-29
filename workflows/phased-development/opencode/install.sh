@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./opencode/install.sh [--copy]
+Usage: ./workflows/phased-development/opencode/install.sh [--copy]
 
 Install the phased-development workflow for OpenCode V2.
 
@@ -29,10 +29,11 @@ case "${1:-}" in
     ;;
 esac
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source_agents="$repo_root/opencode/agents/workflow"
-source_commands="$repo_root/opencode/commands/workflow"
-source_skill="$repo_root/opencode/skills/phase-implementation"
+package_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$package_root/../../.." && pwd)"
+source_agents="$package_root/agents/workflow"
+source_commands="$package_root/commands/workflow"
+source_skill="$package_root/skills/phase-implementation"
 opencode_config_root="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 
 declare -a sources=("$source_agents" "$source_commands" "$source_skill")
@@ -73,12 +74,6 @@ else
   echo "Copied files will not update automatically; rerun after pulling updates."
 fi
 
-cat <<'EOF'
-
-Installed:
-  ~/.config/opencode/agents/workflow
-  ~/.config/opencode/commands/workflow
-  ~/.config/opencode/skills/phase-implementation
-
-Prerequisite: `/workflow/commit-phase` also requires the `git-commit` skill.
-EOF
+printf '\nInstalled:\n  %s\n  %s\n  %s\n' "${destinations[@]}"
+printf '\nInstall command: ./workflows/phased-development/opencode/install.sh\n'
+printf 'Prerequisite: `/workflow/commit-phase` also requires the `git-commit` skill.\n'
