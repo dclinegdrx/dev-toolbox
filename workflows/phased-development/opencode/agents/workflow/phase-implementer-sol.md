@@ -29,6 +29,15 @@ permissions:
     resource: "git clean *"
     effect: deny
   - action: shell
+    resource: "git restore *"
+    effect: deny
+  - action: shell
+    resource: "git checkout *"
+    effect: deny
+  - action: shell
+    resource: "git switch *"
+    effect: deny
+  - action: shell
     resource: "*git *add*"
     effect: deny
   - action: shell
@@ -42,6 +51,15 @@ permissions:
     effect: deny
   - action: shell
     resource: "*git *clean*"
+    effect: deny
+  - action: shell
+    resource: "*git *restore*"
+    effect: deny
+  - action: shell
+    resource: "*git *checkout*"
+    effect: deny
+  - action: shell
+    resource: "*git *switch*"
     effect: deny
 ---
 

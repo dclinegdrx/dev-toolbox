@@ -38,4 +38,7 @@ replace that literal text with an explicit plan path, for example
 your launcher does not support it.
 
 See the [shared workflow README](../README.md) for lifecycle rules and a
-comparison with the OpenCode implementation.
+comparison with the OpenCode implementation. These self-contained prompts
+select the next incomplete phase; OpenCode instead requires an explicit phase
+number and uses coordinator model routing and child sessions. The
+implementations share workflow guarantees, not byte-for-byte prompt text.

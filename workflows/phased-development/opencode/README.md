@@ -109,24 +109,32 @@ Review, verify, and stage the accepted phase changes
 /workflow/commit-phase docs/plans/<plan>.md 1
 Repeat for later phases
 /workflow/integration-review docs/plans/<plan>.md
-Push after your final checks
+Push separately only if you decide to after final checks
 ```
 
 ### Important Details
 
 - `/workflow/finalize-plan` stays in the current session and preserves its
-  selected agent and model.
+  selected agent and model. `workflow/planner` is an optional directly selected
+  planning agent; it is not substituted for that command.
 - `/workflow/start-phase` switches the parent to the coordinator. The
-  coordinator chooses an implementation agent and launches it in a background
-  child session.
+  coordinator validates the explicit phase number, chooses an implementation
+  agent, and launches it in a background child session.
 - The implementation child updates its assigned plan phase from `NOT STARTED`
-  to `IN PROGRESS` and leaves all changes unstaged.
+  to `IN PROGRESS`, preserves unrelated non-overlapping work, and leaves its
+  changes unstaged.
 - After human review, stage the implementation **and the plan file**. The
-  committer expects the staged plan transition to `IN PROGRESS`, changes it to
-  `COMPLETE`, stages the plan again, and commits the final combined diff.
+  committer changes only the accepted phase to `COMPLETE`, stages the plan
+  again, and commits the final combined diff. If finalization fails after that
+  status change, it repairs the status to `IN PROGRESS` before stopping.
 - `/workflow/integration-review` is read-only. Run any recommended mutable
-  checks yourself.
+  checks yourself; the reviewer reports only checks it actually ran.
 - The workflow never pushes.
+
+The portable prompts select the next incomplete phase directly. OpenCode
+requires an explicit phase number and uses coordinator model routing and child
+sessions. See the [shared workflow README](../README.md) for the complete
+parity map and common workflow guarantees.
 
 ## Update or Remove
 

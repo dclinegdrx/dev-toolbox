@@ -8,7 +8,16 @@ Finalize the implementation plan based on everything we have discussed so far.
 Stay in this session with the currently selected agent and model. Do not switch
 agents or models.
 
-Before writing it, do one final pass against the repository and make sure the plan reflects the actual codebase, existing architecture, conventions, tests, and constraints. Resolve any remaining ambiguity you can from the code rather than guessing.
+Treat the plan as the source of truth for the intended outcome and the
+repository as the source of truth for implementation details. Preserve
+unrelated local work. Resolve ordinary ambiguity from the code rather than
+guessing, disclose minor repository drift, and ask before a material
+architecture, contract, migration, security, compatibility, or phase-boundary
+change. Do not implement, stage, commit, or push in this step.
+
+Before writing it, do one final pass against the repository and make sure the
+plan reflects the actual codebase, existing architecture, conventions, tests,
+deployment or operational constraints, and existing work.
 
 Structure the work into clear implementation phases.
 
@@ -26,13 +35,13 @@ Each phase should:
 
 Every phase must include an explicit status field. When the plan is first created, set every phase to:
 
-Status: NOT STARTED
+**Status: NOT STARTED**
 
 Use only these status values throughout the plan:
 
-* NOT STARTED
-* IN PROGRESS
-* COMPLETE
+* `NOT STARTED`
+* `IN PROGRESS`
+* `COMPLETE`
 
 For each phase, use this structure:
 
@@ -59,9 +68,14 @@ List the observable conditions that indicate the phase is complete and ready to 
 Also include:
 
 * A short overview of the intended solution and architecture.
-* Important assumptions or constraints.
-* Risks or areas that deserve particular attention during implementation.
-* Any final integration or end-to-end verification that should happen after all phases are complete.
+* Important assumptions and constraints.
+* Risks, failure modes, and areas that deserve particular attention during implementation.
+* Relevant observability, security, privacy, performance, retry, idempotency,
+  data-integrity, or backward-compatibility concerns.
+* Rollout, migration, or rollback considerations when applicable.
+* Any final integration, end-to-end, regression, or manual verification that
+  should happen after all phases are complete.
+* The intended base branch or comparison reference when it is known.
 
 The plan should contain enough context that a capable implementation agent with no knowledge of our current conversation can execute it successfully.
 
@@ -69,8 +83,12 @@ The phase status is the authoritative record of implementation progress. Future 
 
 Do not implement the changes yet.
 
-Write the completed plan as a Markdown file under `docs/plans/`.
+Write the completed plan as a concise Markdown file under `docs/plans/`. If
+that directory does not exist, create it. Choose a descriptive filename that
+begins with the current date in ISO 8601 format (`YYYY-MM-DD`), followed by a
+short kebab-case description:
 
-Choose a concise, descriptive filename based on the work. If `docs/plans/` does not exist, create it.
+`docs/plans/YYYY-MM-DD-<descriptive-plan-name>.md`
 
-After writing the file, tell me the path and give me a short summary of the phases you created.
+After writing the file, report the path, phase summary and statuses, important
+assumptions or risks, and any small safe deviations.

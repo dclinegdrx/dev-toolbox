@@ -40,3 +40,30 @@ commit.
 The portable prompts are self-contained. The OpenCode package uses its own
 agents, commands, skill, and installation mechanics. Both implementations are
 available under this workflow directory.
+
+## Parity and intentional differences
+
+Both implementations use the lifecycle and safety boundaries above. The plan
+defines the intended outcome; the repository defines the implementation
+details. They preserve unrelated local work, allow and report minor repository
+drift, and require clarification for material architecture, contract,
+migration, security, compatibility, or phase-boundary changes.
+
+| Lifecycle stage | Portable prompt | OpenCode command | OpenCode agent or skill |
+| --- | --- | --- | --- |
+| Plan | [Finalize plan](prompts/finalize-plan.md) | `/workflow/finalize-plan` | Current-session command; [`planner.md`](opencode/agents/workflow/planner.md) is optional when directly selected |
+| Implement a phase | [Implement phase](prompts/implement-phase.md) | `/workflow/start-phase <plan> <phase>` | `coordinator.md` routes to an implementer; [phase-implementation skill](opencode/skills/phase-implementation/SKILL.md) |
+| Review, stage, and finalize | [Commit phase](prompts/commit-phase.md) | `/workflow/commit-phase <plan> <phase>` | `phase-committer.md` and the external `git-commit` skill |
+| Full-branch review | [Integration review](prompts/integration-review.md) | `/workflow/integration-review <plan>` | `integration-reviewer.md` |
+
+The portable implementation selects the next incomplete phase itself. OpenCode
+commands instead require an explicit phase number, validate that it is next,
+and use a coordinator to route work to a child session and model. The
+`/workflow/finalize-plan` command stays in the active session and retains its
+selected agent and model; `planner.md` remains an optional directly selected
+agent.
+
+OpenCode's integration reviewer is read-only by permission. It reviews
+available evidence and recommends mutable checks rather than running them; it
+must never report an unrun check as passing. The implementations intentionally
+share guarantees rather than identical wording or mechanics.

@@ -4,26 +4,33 @@ agent: workflow/phase-committer
 subagent: true
 ---
 
-I have reviewed, verified, and staged the implementation for Phase $2 in `$1`.
+I have reviewed and accepted the implementation for Phase $2 in `$1` and have
+staged all implementation work intended for its commit. Finalize that phase as
+one commit.
 
 Load and follow the `git-commit` skill.
 
-1. Confirm Phase $2 is currently `IN PROGRESS`.
-2. Review the staged diff, including any staged change to `$1`.
-3. A staged plan-file change is expected when it changes only the assigned
-   phase from `NOT STARTED` to `IN PROGRESS`. Confirm that it contains no
-   other plan edits or phase-status changes.
-4. Confirm the remaining staged files contain only the accepted Phase $2
-   implementation.
-5. Update only the assigned phase in `$1` from `IN PROGRESS` to `COMPLETE`.
-6. Stage `$1` again so the final plan diff records `NOT STARTED` to
-   `COMPLETE` for only the assigned phase.
-7. Review the complete final staged diff.
-8. Create an appropriate commit.
-9. Do not push.
+Treat this as finalization, not a second implementation pass. If an earlier
+failed attempt stranded Phase $2 at `COMPLETE` without creating its commit,
+repair only that phase to `IN PROGRESS` before normal validation. Then confirm
+Phase $2 is the first incomplete phase and is `IN PROGRESS`. Inspect the
+complete worktree and staged and unstaged diffs, then treat the staged
+implementation diff as the human's proposed commit scope.
 
-Stop if `$1` is not under `docs/plans/`; the staged plan change is not the
-expected transition for the assigned phase; the staged diff contains unrelated
-work; or the implementation does not match the phase.
+Before changing the plan status, stop if any required implementation artifact
+is unstaged or untracked, the staged scope includes unrelated work, or its
+relationship to Phase $2 is unclear. Do not stage, unstage, or edit
+implementation files. Do not proceed unless `$1` is under `docs/plans/`.
 
-Report the commit hash and message.
+Use existing implementation evidence and run only missing or directly affected
+checks. Change only Phase $2 from `IN PROGRESS` to `COMPLETE`, stage only that
+plan-file update, review the complete final staged diff, and create one commit.
+Do not push.
+
+If validation, final staged-diff review, or commit creation fails after the
+status update, repair only Phase $2 to `IN PROGRESS`, stage that repair, leave
+implementation staging unchanged, and report what must be resolved.
+
+Report the plan path and phase statuses, commit hash and message, committed
+files, verification actually used, any intentionally excluded files, and any
+recovery or deviation.
