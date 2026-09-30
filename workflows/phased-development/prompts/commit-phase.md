@@ -17,7 +17,7 @@ Treat this as finalization, not a second implementation pass. Use these instruct
 
 ## Commit Message Instructions
 
-Refer to the the git-commit skill for standard commit message generation instructions. 
+Refer to the the git-commit skill for standard commit message generation instructions.
 
 ## Recovery rule
 
