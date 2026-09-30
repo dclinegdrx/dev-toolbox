@@ -34,6 +34,47 @@ For manual use, copy the prompt into the harness and replace `{clipboard}` with
 the explicit PR URL. Confirm that the URL, repository, and worktree are the
 ones you intend to review before starting.
 
+## Example review outline
+
+The [Go manager review](prompts/go/manager-review.md) produces a concise report
+that separates business context, existing feedback, material residual risk, and
+the conversation a manager may need to have. This illustrative example uses
+placeholders rather than a real pull request:
+
+### A. Business and PR context
+
+- **Jira:** `TEAM-123` — add idempotency to a fulfillment retry path.
+- **PR:** `[TEAM-123] fix: avoid duplicate delivery requests` by `@author`.
+- **Observed validation:** unit tests passed; no end-to-end replay test found.
+- **Risk:** Medium. The affected path can issue an external request more than
+  once after a timeout.
+
+### B. Existing-review triage
+
+| Thread | Author/type | Status | Disposition | Why |
+| --- | --- | --- | --- | --- |
+| Retry counter is not reset | Automated reviewer | Open | Existing thread - no action | It already identifies the same failure path and recommends the needed test. |
+
+### C. Review summary
+
+- The retry state is now persisted before the external call, which addresses
+  the main duplicate-delivery risk.
+- Existing automated feedback covers the missing counter-reset test.
+- No material new issue was found; a human should confirm replay behavior with
+  the external vendor before approval.
+
+### D. New findings and worthwhile replies
+
+No new findings. The existing automated thread is sufficient and does not need
+an additional reply.
+
+### E. Manager narrative
+
+> The implementation addresses the primary retry-safety concern. Before
+> approval, I would ask for confirmation that a timed-out request can be replayed
+> safely by the vendor and that the existing counter-reset test is added. I do
+> not see a separate blocker beyond those items.
+
 ## Available prompts
 
 | Prompt | Use when |
