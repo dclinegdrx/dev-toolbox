@@ -60,20 +60,35 @@ placeholders rather than a real pull request:
 - The retry state is now persisted before the external call, which addresses
   the main duplicate-delivery risk.
 - Existing automated feedback covers the missing counter-reset test.
-- No material new issue was found; a human should confirm replay behavior with
-  the external vendor before approval.
+- One minor new finding remains: the changed retry path has no test for a
+  process restart between persistence and replay.
+- A human should confirm replay behavior with the external vendor before
+  approval.
 
 ### D. New findings and worthwhile replies
 
-No new findings. The existing automated thread is sufficient and does not need
-an additional reply.
+**New — Minor — Test coverage — High confidence — Non-blocking**
+
+- **File:** `internal/fulfillment/retry.go:142`
+- **Issue:** The new persisted retry state is not exercised across a process
+  restart.
+- **Failure scenario:** A worker can persist the retry marker, restart before
+  completing the request, and replay with a stale in-memory counter.
+- **Evidence:** The added tests cover a timeout in one process but do not
+  recreate the handler or reload the persisted state.
+- **Smallest recommendation:** Add a focused restart-and-replay test.
+- **Action:** New PR comment.
+- **Draft comment:** `Could we add a restart-and-replay case here? The current
+  tests cover a timeout, but not whether a freshly initialized worker reloads
+  the persisted retry state before issuing the request again.`
 
 ### E. Manager narrative
 
 > The implementation addresses the primary retry-safety concern. Before
 > approval, I would ask for confirmation that a timed-out request can be replayed
-> safely by the vendor and that the existing counter-reset test is added. I do
-> not see a separate blocker beyond those items.
+> safely by the vendor, that the existing counter-reset test is added, and that
+> the retry state survives a worker restart. I do not see a blocker, but the
+> restart case is a worthwhile regression test before this path changes again.
 
 ## Available prompts
 
