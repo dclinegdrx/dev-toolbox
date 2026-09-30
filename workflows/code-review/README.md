@@ -39,6 +39,14 @@ ones you intend to review before starting.
 | Prompt | Use when |
 | --- | --- |
 | [Go manager review](prompts/go/manager-review.md) | You want a manager-focused PR review that triages existing automated and human review threads before identifying residual risk. |
+| [Agent DevTools manager review](prompts/agent-devtools/manager-review.md) | You are reviewing agent skills, shared tooling, CLI/catalog behavior, or install and discovery flows. |
+| [API specs manager review](prompts/api-specs/manager-review.md) | You are reviewing API contracts, schema evolution, compatibility, and consumer impact. |
+| [Domain Graph manager review](prompts/domain-graph/manager-review.md) | You are reviewing GoodRx Domain Graph schema, resolver, service, API-client, or GraphQL platform changes. |
+| [Fastly infrastructure manager review](prompts/fastly-infrastructure/manager-review.md) | You are reviewing Fastly, Terraform, VCL, routing, caching, or production rollout changes. |
+| [Observability manager review](prompts/observability/manager-review.md) | You are reviewing GoodRx observability monitors, dashboards, routing, or Groundcover migration work. |
+| [Retool manager review](prompts/retool-src-ctrl/manager-review.md) | You are reviewing Retool UI, query wiring, generated metadata, resource, or operational-workflow changes. |
+| [Singularity manager review](prompts/singularity/manager-review.md) | You are reviewing Singularity frontend, analytics, state-machine, GraphQL, or Lifecycle-preview changes. |
+| [Follow-up review](prompts/shared/follow-up-review.md) | An author has updated a PR in response to prior review feedback. |
 
 See [prompt organization](prompts/README.md) before adding prompts for another
 language, project, or review role.
